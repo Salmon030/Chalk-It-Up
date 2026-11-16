@@ -1,0 +1,9 @@
+@echo off
+where node >nul 2>nul || (echo Node.js is not installed. Get it from https://nodejs.org then run this file again. & pause & exit /b 1)
+echo Installing (first time takes a few minutes)...
+call npm install || (pause & exit /b 1)
+echo Building the exe...
+call npm run dist || (pause & exit /b 1)
+echo Done! Opening the dist folder...
+start "" dist
+pause

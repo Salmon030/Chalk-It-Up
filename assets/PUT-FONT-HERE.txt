@@ -1,0 +1,1 @@
+Optional: drop PressStart2P-Regular.ttf in this folder for fully offline pixel text.
