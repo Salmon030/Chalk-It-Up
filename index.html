@@ -85,7 +85,7 @@ body.intitle #menub,body.intitle #tbb,body.intitle #hb{display:none}
 <section id="al" hidden=""><h2>🤖 AI Link</h2><div id="alst"></div>
 <label class="row"><input type="radio" name="prov" value="claude"> Built-in Claude (works in this page)</label>
 <label class="row"><input type="radio" name="prov" value="http"> Custom endpoint (for the EXE build; this page blocks outside connections)</label>
-<input type="text" id="aUrl" placeholder="https://api.example.com/v1/chat/completions"><input type="text" id="aKey" placeholder="API key"><input type="text" id="aMod" placeholder="model name">
+<select id="aProv2" hidden=""><option value="anthropic">Anthropic (paid key)</option><option value="gemini">Google Gemini (free key)</option><option value="ollama">Ollama on this PC (free, offline)</option><option value="custom">Other OpenAI-compatible server</option></select><input type="text" id="aUrl" placeholder="https://api.example.com/v1/chat/completions"><input type="text" id="aKey" placeholder="API key"><input type="text" id="aMod" placeholder="model name">
 <div class="row"><label class="row">Quality <select id="aQ"><option value="quick">Fast</option><option value="default">Balanced</option><option value="complex">Best</option></select></label><label class="row"><input type="checkbox" id="aSnap"> Let the AI see the game</label><label class="row"><input type="checkbox" id="aReact"> Poppy reacts to my drawing using the AI</label></div>
 <div class="row"><button class="go" id="aTest">Test AI link</button><button class="t" id="aSave">Save</button><button class="t" id="x4">Back</button></div></section>
 <section id="rc" hidden=""><h2>🧬 Recode the game</h2><div class="dim">Tell the AI how to change the game. It writes a mod that runs live.</div><div class="row" id="rcChips"></div>
@@ -311,8 +311,8 @@ function aiMsg(e){const c=e&&e.code;return c==="not_granted"?"Permission needed:
 async function askHTTP(brief,text,tools){const lib=tools&&tools[0]?JSON.stringify(await tools[0].execute({})):"",msg=brief+"\nLIBRARY: "+lib+"\n"+text,an=AIS.url.includes("anthropic"),h={"Content-Type":"application/json"};if(an){h["x-api-key"]=AIS.key;h["anthropic-version"]="2023-06-01";h["anthropic-dangerous-direct-browser-access"]="true"}else if(AIS.key)h.Authorization="Bearer "+AIS.key;
 const r=await fetch(AIS.url,{method:"POST",headers:h,body:JSON.stringify(an?{model:AIS.model,max_tokens:4000,messages:[{role:"user",content:msg}]}:{model:AIS.model,messages:[{role:"user",content:msg}]})});if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();return j.choices?j.choices[0].message.content:j.content.map(x=>x.text||"").join("")}
 async function aiCheck(){try{const s=window.claude&&await claude.use("sample");AI.has=!!s||!!window.CHALK_AI||!!window.chalkDesktop||(AIS.prov==="http"&&!!AIS.url);AI.img=s?!!(await s.limits()).images:!!window.chalkDesktop}catch(e){AI.has=false}aiChip()}
-function aiChip(){const t=AI.ok===false?"🔴 AI problem":AI.ok?"🟢 AI ready":AI.has?"⚪ AI available":"🔴 AI offline";$("#aist").textContent=t;$("#mst2").textContent=$("#mst").textContent=t+" · "+(window.chalkDesktop?"desktop app (Anthropic API)":AIS.prov==="http"?"custom endpoint":"built-in Claude")+(AI.err?" · "+AI.err:"")}
-function saveSet(){AIS.prov=document.querySelector("[name=prov]:checked").value;AIS.url=$("#aUrl").value.trim();AIS.key=$("#aKey").value.trim();AIS.model=$("#aMod").value.trim();AIS.q=$("#aQ").value;AIS.snap=$("#aSnap").checked;AIS.react=$("#aReact").checked;if(window.chalkDesktop){chalkDesktop.set("apiKey",AIS.key);chalkDesktop.set("model",AIS.model)}try{LS.set("chalk_ai_v1",JSON.stringify(AIS))}catch(e){}}
+function aiChip(){const t=AI.ok===false?"🔴 AI problem":AI.ok?"🟢 AI ready":AI.has?"⚪ AI available":"🔴 AI offline";$("#aist").textContent=t;$("#mst2").textContent=$("#mst").textContent=t+" · "+(window.chalkDesktop?("desktop app ("+(chalkDesktop.get("provider")||"anthropic")+")"):AIS.prov==="http"?"custom endpoint":"built-in Claude")+(AI.err?" · "+AI.err:"")}
+function saveSet(){AIS.prov=document.querySelector("[name=prov]:checked").value;AIS.url=$("#aUrl").value.trim();AIS.key=$("#aKey").value.trim();AIS.model=$("#aMod").value.trim();AIS.q=$("#aQ").value;AIS.snap=$("#aSnap").checked;AIS.react=$("#aReact").checked;if(window.chalkDesktop){const pv=$("#aProv2").value;chalkDesktop.set("provider",pv);chalkDesktop.set("apiKey",pv==="ollama"?"":AIS.key);chalkDesktop.set("model",AIS.model);chalkDesktop.set("baseUrl",$("#aUrl").hidden?"":$("#aUrl").value.trim())}try{LS.set("chalk_ai_v1",JSON.stringify(AIS))}catch(e){}}
 function alShow(){document.querySelectorAll("[name=prov]").forEach(r=>r.checked=r.value===AIS.prov);$("#aUrl").value=AIS.url;$("#aKey").value=AIS.key;$("#aMod").value=AIS.model;$("#aQ").value=AIS.q;$("#aSnap").checked=AIS.snap;$("#aReact").checked=AIS.react!==false;aiCheck().then(()=>$("#alst").textContent=$("#mst").textContent+(AI.n?" · last reply "+AI.ms+" ms, "+AI.n+" calls":"")+(AI.img?" · can see images":""))}
 $("#aSave").onclick=()=>{saveSet();alShow()};
 $("#aTest").onclick=async()=>{saveSet();$("#alst").textContent="Testing…";try{const t0=performance.now(),r=await AI.ask('Reply with ONLY this JSON: {"ok":true,"hi":"a short friendly greeting"}',"ping",[],[]);$("#alst").textContent="✅ Connected in "+Math.round(performance.now()-t0)+" ms. The AI says: "+(r.hi||"hi")}catch(e){$("#alst").textContent="❌ "+AI.err}};
@@ -491,7 +491,10 @@ squash:{d:"Squashes and stretches as if breathing.",p:{},f(c){const s=Math.sin(c
 /* ---------- EXE support ---------- */
 async function desktopAI(brief,text,imgs,tools){const lib=tools&&tools[0]?JSON.stringify(await tools[0].execute({})):"",b64=b=>new Promise(res=>{const r=new FileReader();r.onload=()=>res({data:String(r.result).split(",")[1],mime:b.type||"image/png"});r.readAsDataURL(b)}),images=[];for(const b of imgs||[])images.push(await b64(b));return parseJ(await chalkDesktop.ai({prompt:brief+"\nLIBRARY: "+lib+"\n"+text,images}))}
 if(window.chalkDesktop){for(const id of["#mExit","#tExit"]){$(id).hidden=false;$(id).onclick=()=>{slotWrite();chalkDesktop.quit()}}}
-const _als=alShow;alShow=()=>{_als();if(window.chalkDesktop){document.querySelectorAll("[name=prov]").forEach(r=>r.closest("label").hidden=true);$("#aUrl").hidden=true;$("#aKey").type="password";$("#aKey").placeholder="Anthropic API key (sk-ant-...)";$("#aKey").value=chalkDesktop.get("apiKey")||"";$("#aMod").placeholder="model (default claude-sonnet-5-5)";$("#aMod").value=chalkDesktop.get("model")||""}};
+const PROV={anthropic:{u:"",m:"claude-sonnet-5-5",k:"Anthropic API key (sk-ant-...)",showU:0,showK:1},gemini:{u:"",m:"",k:"Google AI Studio API key (free)",showU:0,showK:1},ollama:{u:"http://localhost:11434/v1",m:"llava",k:"",showU:1,showK:0},custom:{u:"",m:"",k:"API key (if needed)",showU:1,showK:1}};
+function deskFields(){const p=PROV[$("#aProv2").value]||PROV.anthropic;$("#aUrl").hidden=!p.showU;$("#aKey").hidden=!p.showK;$("#aKey").placeholder=p.k;$("#aMod").placeholder="model"+(p.m?" (default "+p.m+")":" (blank = newest Flash)");if(p.showU&&!$("#aUrl").value)$("#aUrl").value=p.u}
+$("#aProv2").onchange=()=>{$("#aUrl").value="";deskFields()};
+const _als=alShow;alShow=()=>{_als();if(window.chalkDesktop){document.querySelectorAll("[name=prov]").forEach(r=>r.closest("label").hidden=true);$("#aProv2").hidden=false;$("#aProv2").value=chalkDesktop.get("provider")||"anthropic";$("#aUrl").value=chalkDesktop.get("baseUrl")||"";$("#aKey").type="password";$("#aKey").value=chalkDesktop.get("apiKey")||"";$("#aMod").value=chalkDesktop.get("model")||"";deskFields()}};
 function zip(files){const enc=new TextEncoder(),T=(()=>{const a=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;a[n]=c>>>0}return a})(),crc=b=>{let c=-1;for(const x of b)c=T[(c^x)&255]^(c>>>8);return(c^-1)>>>0},u16=v=>[v&255,v>>8&255],u32=v=>[v&255,v>>8&255,v>>16&255,v>>24&255],ch=[],cd=[];let off=0;
 for(const[n,d]of files){const nb=enc.encode(n),db=typeof d==="string"?enc.encode(d):d,c=crc(db),h=[...u32(0x04034b50),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(db.length),...u32(db.length),...u16(nb.length),...u16(0)];ch.push(new Uint8Array(h),nb,db);cd.push(new Uint8Array([...u32(0x02014b50),...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(db.length),...u32(db.length),...u16(nb.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nb);off+=h.length+nb.length+db.length}
 let cs=0;for(const x of cd)cs+=x.length;ch.push(...cd,new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cs),...u32(off),...u16(0)]));return new Blob(ch,{type:"application/zip"})}
@@ -507,10 +510,21 @@ ipcMain.on("store:set",(e,k,v)=>{store[k]=v;dirty=true;e.returnValue=true});
 ipcMain.on("store:del",(e,k)=>{delete store[k];dirty=true;e.returnValue=true});
 ipcMain.on("quit",()=>{flush();app.quit()});
 ipcMain.handle("save",async(e,name,data)=>{const r=await dialog.showSaveDialog(BrowserWindow.getFocusedWindow(),{defaultPath:name});if(r.canceled||!r.filePath)return false;fs.writeFileSync(r.filePath,typeof data==="string"?data:Buffer.from(data));return true});
-ipcMain.handle("ai",async(e,a)=>{const key=process.env.ANTHROPIC_API_KEY||store.apiKey;if(!key)throw new Error("No API key yet. Paste one into the AI Link screen, or set ANTHROPIC_API_KEY.");
-const content=(a.images||[]).map(d=>({type:"image",source:{type:"base64",media_type:d.mime||"image/png",data:d.data}}));content.push({type:"text",text:a.prompt});
+const DEF={gemini:"https://generativelanguage.googleapis.com/v1beta/openai",ollama:"http://localhost:11434/v1"};
+let gemModel=null;
+async function geminiModel(base,key){if(gemModel)return gemModel;try{const r=await fetch(base+"/models",{headers:{Authorization:"Bearer "+key},signal:AbortSignal.timeout(15000)});const j=await r.json();const ids=(j.data||[]).map(m=>String(m.id).replace("models/","")).filter(id=>/^gemini-[0-9.]+-flash$/.test(id));ids.sort((a,b)=>parseFloat(b.slice(7))-parseFloat(a.slice(7)));if(ids[0])return gemModel=ids[0]}catch(e){}return"gemini-2.5-flash"}
+ipcMain.handle("ai",async(e,a)=>{const prov=store.provider||"anthropic",imgs=a.images||[];
+if(prov==="anthropic"){const key=process.env.ANTHROPIC_API_KEY||store.apiKey;if(!key)throw new Error("No API key yet. Paste one into the AI Link screen, or choose a free provider there.");
+const content=imgs.map(d=>({type:"image",source:{type:"base64",media_type:d.mime||"image/png",data:d.data}}));content.push({type:"text",text:a.prompt});
 const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:AbortSignal.timeout(120000),headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:store.model||"claude-sonnet-5-5",max_tokens:8000,messages:[{role:"user",content}]})});
-if(!r.ok)throw new Error("Anthropic API "+r.status+": "+(await r.text()).slice(0,300));const j=await r.json();return j.content.map(x=>x.text||"").join("")});
+if(!r.ok)throw new Error("Anthropic API "+r.status+": "+(await r.text()).slice(0,300));const j=await r.json();return j.content.map(x=>x.text||"").join("")}
+let base=store.baseUrl||DEF[prov]||"";while(base.endsWith("/"))base=base.slice(0,-1);if(!base)throw new Error("Set a server address in the AI Link screen.");
+const key=store.apiKey||"";if(prov!=="ollama"&&!key)throw new Error("No API key yet. Paste one into the AI Link screen.");
+const model=store.model||(prov==="gemini"?await geminiModel(base,key):"llava");
+let content=a.prompt;if(imgs.length){content=[{type:"text",text:a.prompt}];for(const d of imgs)content.push({type:"image_url",image_url:{url:"data:"+(d.mime||"image/png")+";base64,"+d.data}})}
+const h={"content-type":"application/json"};if(key)h.authorization="Bearer "+key;
+let r;try{r=await fetch(base+"/chat/completions",{method:"POST",signal:AbortSignal.timeout(180000),headers:h,body:JSON.stringify({model,messages:[{role:"user",content}]})})}catch(err){const c=err.cause&&err.cause.code;throw new Error(c==="ECONNREFUSED"?"Cannot reach "+base+". Is the server running?":String(err.message))}
+if(!r.ok)throw new Error("AI server "+r.status+": "+(await r.text()).slice(0,300));const j=await r.json();return(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||""});
 function createWindow(){const w=new BrowserWindow({width:1280,height:800,minWidth:800,minHeight:520,backgroundColor:"#1b2823",title:"Chalk It Up!",icon:path.join(__dirname,"build","icon.png"),webPreferences:{preload:path.join(__dirname,"preload.js"),contextIsolation:true,nodeIntegration:false}});
 w.setMenuBarVisibility(false);w.loadFile("index.html");
 w.webContents.setWindowOpenHandler(({url})=>{shell.openExternal(url);return{action:"deny"}});
@@ -521,7 +535,7 @@ app.on("second-instance",()=>{const w=BrowserWindow.getAllWindows()[0];if(w){if(
 app.on("window-all-closed",()=>app.quit());
 `,pre:`const{contextBridge,ipcRenderer}=require("electron");
 contextBridge.exposeInMainWorld("chalkDesktop",{get:k=>ipcRenderer.sendSync("store:get",k),set:(k,v)=>ipcRenderer.sendSync("store:set",k,v),del:k=>ipcRenderer.sendSync("store:del",k),save:(n,d)=>ipcRenderer.invoke("save",n,d),ai:p=>ipcRenderer.invoke("ai",p),quit:()=>ipcRenderer.send("quit")});
-`,pkg:`{"name":"chalk-it-up","version":"1.0.0","description":"Chalk It Up! - draw it, print it, play with it","author":"Chalk It Up","main":"main.js","scripts":{"start":"electron .","dist":"electron-builder --win","dist:mac":"electron-builder --mac","dist:linux":"electron-builder --linux"},"devDependencies":{"electron":"^31.0.0","electron-builder":"^24.13.3"},"build":{"appId":"com.chalkitup.game","productName":"Chalk It Up","files":["main.js","preload.js","index.html","build/icon.png","assets/**"],"win":{"target":["nsis","portable"],"icon":"build/icon.png"},"nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true},"mac":{"category":"public.app-category.games"},"linux":{"target":"AppImage","category":"Game"}}}
+`,pkg:`{"name":"chalk-it-up","version":"1.0.0","description":"Chalk It Up! - draw it, print it, play with it","author":"Chalk It Up","main":"main.js","scripts":{"start":"electron .","dist":"electron-builder --win --publish never","dist:mac":"electron-builder --mac --publish never","dist:linux":"electron-builder --linux --publish never"},"devDependencies":{"electron":"^31.0.0","electron-builder":"^24.13.3"},"build":{"appId":"com.chalkitup.game","productName":"Chalk It Up","files":["main.js","preload.js","index.html","build/icon.png","assets/**"],"win":{"target":["nsis","portable"],"icon":"build/icon.png"},"nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true},"mac":{"category":"public.app-category.games"},"linux":{"target":"AppImage","category":"Game"}}}
 `,bat:`@echo off
 where node >nul 2>nul || (echo Node.js is not installed. Get it from https://nodejs.org then run this file again. & pause & exit /b 1)
 echo Installing (first time takes a few minutes)...
@@ -531,10 +545,12 @@ call npm run dist || (pause & exit /b 1)
 echo Done! Opening the dist folder...
 start "" dist
 pause
-`,ci:`name: Build Windows exe
+`,ci:`name: Build and release Windows exe
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -542,13 +558,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:
           name: chalk-it-up-windows
           path: dist/*.exe
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*.exe
 `,read:`CHALK IT UP! - DESKTOP PROJECT
 ==============================
 This folder is a complete Electron project. The game is index.html.
@@ -568,14 +588,22 @@ C) BY HAND
    npm install, then npm start to try it, and npm run dist to build.
    (npm run dist:mac and npm run dist:linux build for Mac and Linux.)
 
-AI
-   The desktop game talks to the Anthropic API from the app itself.
-   Open AI Link in the game and paste your API key, or set the ANTHROPIC_API_KEY environment variable.
-   The default model is claude-sonnet-5-5; you can change it in the same screen.
+AI (pick one in the game's AI Link screen)
+   Google Gemini: free key from aistudio.google.com/app/apikey, no card needed (limits apply).
+   Ollama: free and offline. Install it from ollama.com, run  ollama pull llava  once, keep it running.
+   Anthropic Claude: paid key from console.anthropic.com (best results; can also use ANTHROPIC_API_KEY).
+   Other: any OpenAI-compatible server (set its address, key and model).
+   Smaller or free models write weaker code, so Recode and blueprints may need a retry.
 
 SAVES
    Stored in your user data folder (chalk-store.json), not in a browser.
    Marie's mail buttons open a normal Save dialog.
+
+PUBLISHING A RELEASE (so others can download the exe)
+   On GitHub open Releases, then Draft a new release. Choose a tag, type v1.0.0 and pick Create new tag.
+   Give it a title and click Publish release. The workflow builds the exes and attaches them to that release
+   a few minutes later. No token is needed; GitHub provides one to the workflow itself.
+   The repository must be public for other people to download from it.
 
 TIPS
    F11 toggles full screen. Windows may warn about an unsigned app the first time (More info, then Run anyway).
